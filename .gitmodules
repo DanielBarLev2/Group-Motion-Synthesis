@@ -1,6 +1,0 @@
-[submodule "priorMDM"]
-	path = priorMDM
-	url = https://github.com/priorMDM/priorMDM.git
-[submodule "trace"]
-	path = trace
-	url = https://github.com/nv-tlabs/trace.git
