@@ -1,0 +1,15 @@
+trace
+priorMDM
+slurm
+
+commends
+notebook.txt
+
+.vscode/launch.json
+integration/data.hdf5
+priorMDM/dataset/HumanML3D/animations
+
+
+slurms/test_cuda/
+trace/requirements.txt
+trace/tbsim/utils/viz_utils.py

@@ -5,29 +5,37 @@ from matplotlib import pyplot as plt
 import tbsim.utils.geometry_utils as GeoUtils
 
 
-def load_scene_data(scene_key):
+def load_scene_data(scene_key: str, data_path: str) -> dict:
     """
-    Reads scene data for a specified scene from an HDF5 file.
-    
-    @param: scene_key (str): Key for the scene to load data from.
+        Loads scene data from an hdf5 file.
+        
+        Args:
+            scene_key: Key identifying the scene in the HDF5 file.
+            data_path: Path to the HDF5 file.
 
-    Returns:
-        dict: A dictionary containing data arrays for all datasets within the specified scene.
+        Returns:
+            scene_data: A dictionary of dataset names and their corresponding data arrays for one scene.
+                {
+                    action_positions
+                    action_sample_positions 
+                    action_sample_yaws 
+                    action_traj_positions 
+                    action_traj_yaws 
+                    action_yaws 
+                    centroid 
+                    extent 
+                    scene_index 
+                    track_id 
+                    world_from_agent
+                    yaw
+                }
     """
-    file_path = "data.hdf5"
     scene_data = {}
     
-    with h5py.File(file_path, 'r') as file:
-           
-        # Check if the scene key exists in the file
+    with h5py.File(data_path, 'r') as file:
         if scene_key in file:
-            # Iterate over each dataset within the scene group
             for dataset_name in file[scene_key]:
-                
                 data = np.array(file[scene_key][dataset_name])
-
-                print(f'{dataset_name} shape of: {data.shape}')
-
                 scene_data[dataset_name] = data
         else:
             print(f"No data found for scene key: {scene_key}")
@@ -35,67 +43,57 @@ def load_scene_data(scene_key):
     return scene_data
 
 
-def convert_to_world_coordinates(scene_data):
+def convert_to_world_coordinates(scene_data:  dict) -> np.ndarray:
     """
-    Convert local (x,y) positions to world coordinates using a 2D transform in TBSim.
+    Converts local (x, y) positions to world coordinates using a 2D transformation matrix.
+
+    scene_data["action_traj_positions"][taj_index, time_frame, frame_index, [x, y]] -> world_positions[taj_index, time_frame, frame_index, [x, y]]
+
+    Args:
+        scene_data: A dictionary of dataset names and their corresponding data arrays for one scene.
+            
+    Returns:
+        world_positions: Transformed world coordinates with the same shape as the input positions.
     """
-    # shape: (1, 50, 52, 2)
     action_traj_positions = scene_data["action_traj_positions"]
-    # shape: (1, 50, 3, 3), which is a 2D transform in homogeneous form
     world_from_agent = scene_data["world_from_agent"]  
 
-    # Directly pass 2D points to TBSim's function (without adding z=0):
-    # This way, batch_nd_transform_points_np recognizes a 2D transform.
-    world_positions = GeoUtils.batch_nd_transform_points_np(
-        action_traj_positions,   # shape (...,2)
-        world_from_agent         # shape (...,3,3)
-    )
+    world_positions = GeoUtils.batch_nd_transform_points_np(action_traj_positions, world_from_agent)
     return world_positions
 
 
-def plot_trajectories(
-    trajectories_2d, 
-    ax=None, 
-    show=True, 
-    labels=None,
-    save_path=None,
-):
+def plot_world_trajectories(world_positions: np.ndarray,
+                            ax: plt.Axes = None,
+                            show: bool = True,
+                            labels: list = None,
+                            save_path: str = None) -> None:
     """
-    Plot one or more 2D trajectories on a Matplotlib axis, then save to a file in the CWD.
+    Converts world positions into a concatenated trajectory and plots it on a Matplotlib axis.
 
-    Parameters
-    ----------
-    trajectories_2d : np.ndarray
-        Either shape (T, 2) for a single trajectory or shape (N, T, 2) for N trajectories.
-    ax : matplotlib.axes.Axes, optional
-        Axis on which to draw the trajectories. If None, a new figure + axis is created.
-    show : bool, optional
-        Whether to call plt.show() at the end of the function.
-    labels : list of str, optional
-        If multiple trajectories, labels for each agent/trajectory. Must have length N if provided.
-    save_path : str, optional
-        File name (or full path) to save the figure. If None, defaults to 'plot.png' in CWD.
+    Args:
+        world_positions: Array of world positions, where each element represents a trajectory.
+        ax: Matplotlib axis to draw the trajectory. Creates a new axis if None.
+        show: Whether to display the plot using plt.show().
+        labels: Labels for the trajectories, if multiple. Must match the number of trajectories.
+        save_path: Path to save the plot image. Defaults to 'plot.png' in the current working directory.
+
+    Returns:
+        None
     """
+    # Convert world_positions to a single concatenated trajectory
+    traj = np.concatenate([trajectory[0] for trajectory in world_positions], axis=0)
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 6))
 
-    # Convert (T,2) -> (1,T,2) if input is a single trajectory
-    if len(trajectories_2d.shape) == 2 and trajectories_2d.shape[-1] == 2:
-        trajectories_2d = trajectories_2d[np.newaxis, ...]
-
-    num_trajs = trajectories_2d.shape[0]
-    for i in range(num_trajs):
-        traj = trajectories_2d[i]  # shape (T,2)
-        label_str = labels[i] if (labels is not None and i < len(labels)) else f"Traj {i}"
-        ax.plot(traj[:, 0], traj[:, 1], marker='o', label=label_str)
+    # Plot the concatenated trajectory
+    ax.plot(traj[:, 0], traj[:, 1], marker='o', label="Concatenated Trajectory")
 
     ax.set_aspect('equal', 'box')
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_title("2D Trajectory Plot")
-    if labels is not None:
-        ax.legend()
+    ax.legend()
 
     # Determine file path in current working directory (if none provided)
     if save_path is None:
@@ -137,21 +135,15 @@ def generate_animation():
 
 
 def main():
-    scene_key = "scene_000040_orca_maps_31"
-    scene_data = load_scene_data(scene_key)
-    world_positions = convert_to_world_coordinates(scene_data)
+    scene_key = "scene_000010_orca_maps_31"
+    data_path = "data.hdf5"
 
-    print("World positions shape:", world_positions.shape)
-   
-    single_trajectory = world_positions[1, 0]
-
-    plot_trajectories(single_trajectory, show=False, labels=["Single agent"], save_path="my_trajectory_plot.png")
-
+    scene_data = load_scene_data(scene_key=scene_key, data_path=data_path)
+    world_positions = convert_to_world_coordinates(scene_data=scene_data)
     
-   
 
-    
+    plot_world_trajectories(world_positions, show=False, labels=["Single agent"], save_path="my_trajectory_plot.png")
+ 
 
 if __name__ == "__main__":
-    # scene_data["action_traj_positions"][taj_index, time_frame]
     main()  
