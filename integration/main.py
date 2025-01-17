@@ -4,7 +4,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 import tbsim.utils.geometry_utils as GeoUtils
 
-
 def load_scene_data(scene_key: str, data_path: str) -> dict:
     """
         Loads scene data from an hdf5 file.
@@ -55,7 +54,7 @@ def convert_to_world_coordinates(scene_data:  dict) -> np.ndarray:
         scene_data: A dictionary of dataset names and their corresponding data arrays for one scene.
             
     Returns:
-        world_positions: Transformed world coordinates with the same shape as the input positions.
+        world_positions: Transformed world coordinates.
     """
     action_traj_positions = scene_data["action_traj_positions"]
     world_from_agent = scene_data["world_from_agent"]  
@@ -67,23 +66,25 @@ def convert_to_world_coordinates(scene_data:  dict) -> np.ndarray:
     z_dim = np.zeros((world_positions.shape[0], world_positions.shape[1], 1))
     world_positions = np.concatenate((world_positions, z_dim), axis=2)
 
+    # ###
+    # world_positions = world_positions * 10
+    # ###
+
     return world_positions
 
 
 def plot_world_trajectories(trajectories: np.ndarray,
                             ax: plt.Axes = None,
                             show: bool = True,
-                            labels: list = None,
                             save_path: str = None) -> None:
     """
-    Converts world positions into a concatenated trajectory and plots it on a Matplotlib axis.
-
+    Plots 2D trajectories in world coordinates.
+    Each trajectory is plotted with a different color.
     Args:
         trajectories: Array of world positions, where each element represents a trajectory.
         ax: Matplotlib axis to draw the trajectory. Creates a new axis if None.
         show: Whether to display the plot using plt.show().
-        labels: Labels for the trajectories, if multiple. Must match the number of trajectories.
-        save_path: Path to save the plot image. Defaults to 'plot.png' in the current working directory.
+        save_path: Path to save the plot image. Defaults to save in the current working directory.
 
     Returns:
         None
@@ -105,7 +106,7 @@ def plot_world_trajectories(trajectories: np.ndarray,
     else:
         if not os.path.isabs(save_path):
             save_path = os.path.join(os.getcwd(), save_path)
-            
+
     plt.savefig(save_path, dpi=200, bbox_inches='tight')
     print(f"Plot saved to {save_path}")
 
@@ -113,13 +114,81 @@ def plot_world_trajectories(trajectories: np.ndarray,
         plt.show()
 
 
-
-def convert_data():
+def convert_to_humanml3d_repr(positions, output_filename: str = "output", max_frames: int = 196):
     """
+    Convert 3D Coordinates to HumanML3D representation.
+
+    NOTE: HumanML3D representation refers to the ground plane as the x-z plane, not the x-y plane!
+    x: horizontal axis (left-right), z: depth axis (front-back), y: vertical axis (up-down).
+    Therefore, a transposition is required to convert the world coordinates to HumanML3D representation.
+
+    world_positions[taj_index, time, [x, y, z]] 
+    ---> root_data[taj_index, time, [angular_vel, x_vel, z_vel, y]]
+    
+    Args:
+        positions: world coordinates.
+        output_filename: Name of the output file to save the data.
+        max_frames: Maximum number of frames to consider for each
+               
+    Returns:
+        root_data: root data in HumanML3D representation.
+    """
+    # transpose the y and z coordinates
+    positions = positions[:, :, [0, 2, 1]]
+
+    batch_size, _, _ = positions.shape
+    root_data = np.zeros((batch_size, max_frames, 4))
+
+    for i in range(batch_size):
+        pos = positions[i]  
+
+        # v(t) = positions[t+1] - positions[t]
+        velocity = pos[1:] - pos[:-1] 
+
+        # Compute heading angle in the horizontal (x, z) plane
+        heading = np.arctan2(pos[:, 0], pos[:, 2])
+
+        # Angular velocity: difference in heading angles between consecutive frames
+        r_velocity = heading[1:] - heading[:-1]
+
+        l_velocity = velocity[:, [0, 2]]  
+        
+        root_y = pos[:, 1:2]
+
+        # Combine into final format (N-1, 4)
+        sequence_data = np.concatenate([r_velocity[:, None], l_velocity, root_y[:-1]], axis=-1)
+
+        # Pad or cut the sequence to fit max_frames
+        if sequence_data.shape[0] < max_frames:
+            padding_rows = max_frames - sequence_data.shape[0]
+            padding = np.zeros((padding_rows, 4))
+            sequence_data = np.vstack([sequence_data, padding])
+        else:
+            sequence_data = sequence_data[:max_frames] 
+
+        root_data[i] = sequence_data
+
+    # Save the output data
+    output_path = os.path.join(os.getcwd(), output_filename)
+    np.save(output_path, root_data)
+    print(f"Output data saved to: {output_path}")
+
+    return root_data
+
+
+def convert_data(world_positions: np.ndarray, output_filename: str = "output.mpy", max_frame: int = 196) -> np.ndarray:
+    """
+    joint_num = 22
+      def get_cont6d_params(positions):
+        skel = Skeleton(n_raw_offsets, kinematic_chain, "cpu")
+        # (seq_len, joints_num, 4)
+        
+        recover_from_ric
+        # .mpy
         Using HumanML3D implementation, convert the data to HumanML3D vector representation.
         In particular: [num_of_traj, angular_velocity, linear_velocity_x, linear_velocity_z, y]
     """
-    pass
+    
 
 
 def set_root_mask(trace_data: list) -> np.ndarray:
@@ -141,17 +210,38 @@ def generate_animation():
 
 
 def main():
-    scene_key = "scene_000010_orca_maps_31"
+    scene_key = "scene_000171_orca_maps_31"
     data_path = "data.hdf5"
+    output_filename = "output"
+    max_frames = 196
 
     scene_data = load_scene_data(scene_key=scene_key, data_path=data_path)
+
     world_positions = convert_to_world_coordinates(scene_data=scene_data)
     
+    plot_world_trajectories(world_positions, show=False, save_path="trajectory_plot.png")
 
-    plot_world_trajectories(world_positions, show=False,
-                             labels=["Single agent"],
-                               save_path="my_trajectory_plot20.png")
- 
+    humenml3d_data = convert_to_humanml3d_repr(world_positions=world_positions, output_filename=output_filename, max_frames=max_frames)
+
+
+    # print("World positions shape:", world_positions.shape)
+    # print(world_positions[4])
+    # print("Output shape:", humenml3d_data.shape)
+    # print("[angular_vel, x_vel, z_vel, y]:")
+    # print(humenml3d_data[4])
+
+    # num_frames = 196
+    # movment = np.zeros((4, num_frames))
+    # movment[0, :] = 2
+    # movment[1, :] = 0
+    # movment[2, :] = np.pi/2
+    # movment[3, :] = 0
+
+    # output_path = os.path.join(os.getcwd(), "output")
+    # np.save(output_path, movment)
+    # print(f"Output data saved to: {output_path}")
+
+    # print(move_left_tensor)
 
 if __name__ == "__main__":
     main()  
