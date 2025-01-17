@@ -217,7 +217,6 @@ def generate_animation():
 def main():
     scene_key = "scene_000171_orca_maps_31"
     data_path = "data.hdf5"
-    output_filename = "HML3D_repr"
     max_frames = 196
 
     scene_data = load_scene_data(scene_key=scene_key, data_path=data_path)
@@ -226,7 +225,7 @@ def main():
     
     plot_world_trajectories(world_positions, show=False, save_path="trajectory_plot.png")
 
-    humenml3d_data = convert_to_humanml3d_repr(positions=world_positions, output_filename=output_filename, max_frames=max_frames)
+    humenml3d_data = convert_to_humanml3d_repr(positions=world_positions, max_frames=max_frames)
 
     set_root_mask(humenml3d_data[0])
 

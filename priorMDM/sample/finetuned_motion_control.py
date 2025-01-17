@@ -61,6 +61,21 @@ def main():
     iterator = iter(data)
     input_motions, model_kwargs = next(iterator)
     input_motions = input_motions.to(dist_util.dev())
+
+    """##############################################################"""
+
+    synthetic_data = np.load('/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace/integration/synthetic_data.npy')
+    assert synthetic_data.shape == (args.batch_size, 263, 1, max_frames), "The synthetic data should have the shape [args.batch_size, 263, 1, max_frames]"
+    
+    synthetic_data = torch.from_numpy(synthetic_data).float()
+
+    input_motions = synthetic_data.to(dist_util.dev())
+
+    print("synthetic_data was successfully injected into the model.")
+          
+    """##############################################################"""
+
+
     if args.text_condition != '':
         texts = [args.text_condition] * args.num_samples
         model_kwargs['y']['text'] = texts
@@ -101,7 +116,7 @@ def main():
         if model.data_rep == 'hml_vec':
             n_joints = 22 if sample.shape[1] == 263 else 21
             sample = data.dataset.t2m_dataset.inv_transform(sample.cpu().permute(0, 2, 3, 1)).float()
-            sample = recover_from_ric(sample, n_joints)
+            sample = recover_from_ric(sample, n_joints) # recover
             sample = sample.view(-1, *sample.shape[2:]).permute(0, 2, 3, 1)
 
         all_text += model_kwargs['y']['text']
