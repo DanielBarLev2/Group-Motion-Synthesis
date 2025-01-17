@@ -114,7 +114,7 @@ def plot_world_trajectories(trajectories: np.ndarray,
         plt.show()
 
 
-def convert_to_humanml3d_repr(positions, output_filename: str = "output", max_frames: int = 196):
+def convert_to_humanml3d_repr(positions, max_frames: int = 196):
     """
     Convert 3D Coordinates to HumanML3D representation.
 
@@ -168,38 +168,43 @@ def convert_to_humanml3d_repr(positions, output_filename: str = "output", max_fr
 
         root_data[i] = sequence_data
 
-    # Save the output data
-    output_path = os.path.join(os.getcwd(), output_filename)
-    np.save(output_path, root_data)
-    print(f"Output data saved to: {output_path}")
-
     return root_data
 
 
-def convert_data(world_positions: np.ndarray, output_filename: str = "output.mpy", max_frame: int = 196) -> np.ndarray:
+
+def set_root_mask(root_data: list, output_filename="synthetic_data", batch_size=10, max_frames=196) -> np.ndarray:
     """
-    joint_num = 22
-      def get_cont6d_params(positions):
-        skel = Skeleton(n_raw_offsets, kinematic_chain, "cpu")
-        # (seq_len, joints_num, 4)
-        
-        recover_from_ric
-        # .mpy
-        Using HumanML3D implementation, convert the data to HumanML3D vector representation.
-        In particular: [num_of_traj, angular_velocity, linear_velocity_x, linear_velocity_z, y]
+    Generate synthetic data by broadcasting root data across a batch and save it to a file.
+    root_data[taj_index][time, [angular_vel, x_vel, z_vel, y]]
+    ---> synthetic_data[batch_size, 263, 1, max_frames]
+
+    NOTE:263 => 4 (root_data) + 259 (zeros)
+
+    Args:
+        root_data: Input data representing root positions or features. 
+                   Expected to be of shape (4, max_frames) prior to reshaping.
+        output_filename:Name of the output file to save the data.
+        batch_size: Number of samples in the batch. Defaults to 10.
+        max_frames: Maximum number of frames to consider for each sample. Defaults to 196.
+
+    Saves the synthetic data to a npy file.
     """
+    synthetic_data = np.zeros((batch_size, 263, 1, max_frames))
+
+    # expand from (4, max_frames) to (1, 4, max_frames)
+    root_data = root_data.reshape(1, 4, max_frames) 
+    # Add an additional axis for broadcasting (1, 4, 1, max_frames)
+    root_data = np.expand_dims(root_data, axis=2) 
+    # Broadcast to match the batch size (batch_size, 4, 1, max_frames)
+    root_data = np.broadcast_to(root_data, (batch_size, 4, 1, max_frames)) 
+
+    synthetic_data[:, :4, :, :] = root_data  
+
+    # Saves the output data
+    output_path = os.path.join(os.getcwd(), output_filename)
+    np.save(output_path, root_data)
+    print(f"Output data saved to: {output_path}")
     
-
-
-def set_root_mask(trace_data: list) -> np.ndarray:
-    """
-        set HML_ROOT_HORIZONTAL_MASK as follow:
-            [formatted data from trace,
-              zero * for 260 dimensions]
-    """
-    # trace_array = np.array(trace_data)
-    # return np.concatenate((trace_array, np.zeros(260)))
-    pass
 
 
 def generate_animation():
@@ -212,7 +217,7 @@ def generate_animation():
 def main():
     scene_key = "scene_000171_orca_maps_31"
     data_path = "data.hdf5"
-    output_filename = "output"
+    output_filename = "HML3D_repr"
     max_frames = 196
 
     scene_data = load_scene_data(scene_key=scene_key, data_path=data_path)
@@ -221,27 +226,9 @@ def main():
     
     plot_world_trajectories(world_positions, show=False, save_path="trajectory_plot.png")
 
-    humenml3d_data = convert_to_humanml3d_repr(world_positions=world_positions, output_filename=output_filename, max_frames=max_frames)
+    humenml3d_data = convert_to_humanml3d_repr(positions=world_positions, output_filename=output_filename, max_frames=max_frames)
 
-
-    # print("World positions shape:", world_positions.shape)
-    # print(world_positions[4])
-    # print("Output shape:", humenml3d_data.shape)
-    # print("[angular_vel, x_vel, z_vel, y]:")
-    # print(humenml3d_data[4])
-
-    # num_frames = 196
-    # movment = np.zeros((4, num_frames))
-    # movment[0, :] = 2
-    # movment[1, :] = 0
-    # movment[2, :] = np.pi/2
-    # movment[3, :] = 0
-
-    # output_path = os.path.join(os.getcwd(), "output")
-    # np.save(output_path, movment)
-    # print(f"Output data saved to: {output_path}")
-
-    # print(move_left_tensor)
+    set_root_mask(humenml3d_data[0])
 
 if __name__ == "__main__":
     main()  
