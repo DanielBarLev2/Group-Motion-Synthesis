@@ -63,16 +63,23 @@ def main():
     input_motions = input_motions.to(dist_util.dev())
 
     """##############################################################"""
-
     synthetic_data = np.load('/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace/integration/synthetic_data.npy')
     assert synthetic_data.shape == (args.batch_size, 263, 1, max_frames), "The synthetic data should have the shape [args.batch_size, 263, 1, max_frames]"
     
+    # normalization
+    mean = data.dataset.t2m_dataset.mean[:, None, None]  # Reshape mean to (263, 1, 1)
+    std = data.dataset.t2m_dataset.std[:, None, None]    # Reshape std to (263, 1, 1)
+    synthetic_data = (synthetic_data -  mean) / std
+
     synthetic_data = torch.from_numpy(synthetic_data).float()
 
     input_motions = synthetic_data.to(dist_util.dev())
 
+    #  model_kwargs['y']['lengths']
+    #  model_kwargs['y']['mask']
+    # model_kwargs['y']['text']
+
     print("synthetic_data was successfully injected into the model.")
-          
     """##############################################################"""
 
 
@@ -165,7 +172,7 @@ def main():
             animation_save_path = os.path.join(out_path, save_file)
             rep_files.append(animation_save_path)
             print(f'[({sample_i}) "{caption}" | -> {save_file}]')
-            plot_3d_motion(animation_save_path, skeleton, motion, title=caption,
+            plot_3d_motion(animation_save_path, skeleton, motion, title=caption, # this
                         dataset=args.dataset, fps=fps, vis_mode='gt',
                         gt_frames=gt_frames_per_sample.get(sample_i, []))
         for rep_i in range(args.num_repetitions):
