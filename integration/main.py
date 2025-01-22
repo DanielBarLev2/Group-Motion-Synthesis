@@ -66,9 +66,6 @@ def convert_to_world_coordinates(scene_data:  dict) -> np.ndarray:
     z_dim = np.zeros((world_positions.shape[0], world_positions.shape[1], 1))
     world_positions = np.concatenate((world_positions, z_dim), axis=2)
 
-    # ###
-    # world_positions = world_positions * 10
-    # ###
 
     return world_positions
 
@@ -191,18 +188,19 @@ def set_root_mask(root_data: list, output_filename="synthetic_data", batch_size=
     """
     synthetic_data = np.zeros((batch_size, 263, 1, max_frames))
 
-    # expand from (4, max_frames) to (1, 4, max_frames)
-    root_data = root_data.reshape(1, 4, max_frames) 
-    # Add an additional axis for broadcasting (1, 4, 1, max_frames)
+    # transpose from (4, max_frames) to (4, max_frames)
+    root_data = np.transpose(root_data, (1, 0))
+    # Add an additional axis for broadcasting (4, 1, max_frames)
     root_data = np.expand_dims(root_data, axis=2) 
     # Broadcast to match the batch size (batch_size, 4, 1, max_frames)
-    root_data = np.broadcast_to(root_data, (batch_size, 4, 1, max_frames)) 
+    root_data = np.stack([root_data] * batch_size, axis=0) 
 
+    root_data = np.transpose(root_data, (0 , 1, 3, 2))
     synthetic_data[:, :4, :, :] = root_data  
 
     # Saves the output data
     output_path = os.path.join(os.getcwd(), output_filename)
-    np.save(output_path, root_data)
+    np.save(output_path, synthetic_data)
     print(f"Output data saved to: {output_path}")
     
 
@@ -227,7 +225,7 @@ def main():
 
     humenml3d_data = convert_to_humanml3d_repr(positions=world_positions, max_frames=max_frames)
 
-    set_root_mask(humenml3d_data[0])
+    set_root_mask(humenml3d_data[4])
 
 if __name__ == "__main__":
     main()  
