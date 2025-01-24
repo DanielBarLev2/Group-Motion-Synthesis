@@ -42,17 +42,18 @@ def load_scene_data(scene_key: str, data_path: str) -> dict:
     return scene_data
 
 
-def convert_to_world_coordinates(scene_data:  dict) -> np.ndarray:
+def convert_to_world_coordinates(scene_data:  dict, output_filename: str = "init_positions") -> np.ndarray:
     """
     Converts local trajectories to world coordinates using a 2D transformation matrix.
     Then, add missing z-dimension to the world coordinates - set to zero.
+    In addition, saves the initial positions to a file.
 
     scene_data["action_traj_positions"][taj_index, time_frame_of_diffusion, time, [x, y]]
      ---> world_positions[taj_index, time, [x, y, z]]
 
     Args:
         scene_data: A dictionary of dataset names and their corresponding data arrays for one scene.
-            
+        output_filename: Name of the output file to save the data.
     Returns:
         world_positions: Transformed world coordinates.
     """
@@ -60,11 +61,21 @@ def convert_to_world_coordinates(scene_data:  dict) -> np.ndarray:
     world_from_agent = scene_data["world_from_agent"]  
 
     world_positions = GeoUtils.batch_nd_transform_points_np(action_traj_positions, world_from_agent)
-    # select index 0 becuase it is the final trajectory; why - unknown?
+    # select index 0 becuase it is the final trajectory
     world_positions = world_positions[:, 0, :, :]
 
     z_dim = np.zeros((world_positions.shape[0], world_positions.shape[1], 1))
     world_positions = np.concatenate((world_positions, z_dim), axis=2)
+
+    world_positions = world_positions * 10
+
+    init_positions = world_positions[:, 0, :]
+    init_positions = init_positions[:, [0, 2, 1]] 
+
+    # Saves the output data
+    output_path = os.path.join(os.getcwd(), output_filename)
+    np.save(output_path, init_positions)
+    print(f"init positions saved to: {output_path}")
 
     return world_positions
 
@@ -234,16 +245,8 @@ def set_root_mask(root_data: list, output_filename="synthetic_data") -> np.ndarr
     # Saves the output data
     output_path = os.path.join(os.getcwd(), output_filename)
     np.save(output_path, synthetic_data)
-    print(f"Output data saved to: {output_path}")
+    print(f"synthetic data saved to: {output_path}")
     
-
-
-def generate_animation():
-    """
-        Using priorMDM implementation, generate animation for each of the trajectory.
-    """
-    pass
-
 
 def main():
     scene_key = "scene_000171_orca_maps_31"
