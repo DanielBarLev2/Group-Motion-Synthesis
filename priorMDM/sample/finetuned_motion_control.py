@@ -38,6 +38,13 @@ def main():
             out_path += '_' + args.text_condition.replace(' ', '_').replace('.', '')
 
     print('Loading dataset...')
+
+    """##############################################################"""
+    synthetic_data = np.load('/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace/integration/synthetic_data.npy')
+    args.batch_size = synthetic_data.shape[0]
+    args.num_samples = synthetic_data.shape[0]
+    """##############################################################"""
+
     assert args.num_samples <= args.batch_size, \
         f'Please either increase batch_size({args.batch_size}) or reduce num_samples({args.num_samples})'
     # So why do we need this check? In order to protect GPU from a memory overload in the following line.
@@ -63,29 +70,28 @@ def main():
     input_motions = input_motions.to(dist_util.dev())
 
     """##############################################################"""
-    synthetic_data = np.load('/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace/integration/synthetic_data.npy')
-    assert synthetic_data.shape == (args.batch_size, 263, 1, max_frames), "The synthetic data should have the shape [args.batch_size, 263, 1, max_frames]"
-    
     # normalization
-    mean = data.dataset.t2m_dataset.mean[:, None, None]  # Reshape mean to (263, 1, 1)
-    std = data.dataset.t2m_dataset.std[:, None, None]    # Reshape std to (263, 1, 1)
+    mean = data.dataset.t2m_dataset.mean[:, None, None]  
+    std = data.dataset.t2m_dataset.std[:, None, None]   
+
     synthetic_data = (synthetic_data -  mean) / std
 
     synthetic_data = torch.from_numpy(synthetic_data).float()
 
     input_motions = synthetic_data.to(dist_util.dev())
 
-    #  model_kwargs['y']['lengths']
-    #  model_kwargs['y']['mask']
-    # model_kwargs['y']['text']
+    model_kwargs['y']['lengths'] = torch.full((args.batch_size,), max_frames)
+    model_kwargs['y']['mask'][:, :, :, :4] = True
+    model_kwargs['y']['mask'][:, :, :, 5:] = False
+    model_kwargs['y']['text'] = ["walk with one arm raized" for _ in range(args.batch_size)]
 
     print("synthetic_data was successfully injected into the model.")
     """##############################################################"""
 
 
-    if args.text_condition != '':
-        texts = [args.text_condition] * args.num_samples
-        model_kwargs['y']['text'] = texts
+    # if args.text_condition != '':
+    #     texts = [args.text_condition] * args.num_samples
+    #     model_kwargs['y']['text'] = texts
 
     # add inpainting mask according to args
     assert max_frames == input_motions.shape[-1]
