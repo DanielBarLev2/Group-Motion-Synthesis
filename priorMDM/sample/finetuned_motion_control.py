@@ -46,7 +46,7 @@ def main():
     CWD = "/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace"
     SYNTETIC_DATA_DIR = os.path.join(CWD, "integration/save/synthetic_data.npy")
     INIT_POSITION_DIR = os.path.join(CWD, "integration/save/init_positions.npy")
-    SINGLE_ANIMATION_SAVE_DIR = os.path.join(CWD, "integration/outputs/singles")
+    SINGLE_ANIMATION_SAVE_DIR = os.path.join(CWD, "integration/outputs/singles/singles")
     MULTI_ANIMATION_SAVE_DIR = os.path.join(CWD, "integration/outputs/multi")
 
     synthetic_data = np.load(SYNTETIC_DATA_DIR)
@@ -93,7 +93,7 @@ def main():
     model_kwargs['y']['lengths'] = torch.full((args.batch_size,), max_frames)
     model_kwargs['y']['mask'][:, :, :, :4] = True
     model_kwargs['y']['mask'][:, :, :, 5:] = False
-    model_kwargs['y']['text'] = ["walk" for _ in range(args.batch_size)]
+    model_kwargs['y']['text'] = ["a person fighting" for _ in range(args.batch_size)]
 
     print("synthetic_data was successfully injected into the model.")
     """##############################################################"""

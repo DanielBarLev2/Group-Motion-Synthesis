@@ -31,7 +31,7 @@ for arg in "$@"; do
             MOTION_CONTROL=true
             shift
             ;;
-        --run-scene-editor)
+        --scene-editor)
             RUN_SCENE_EDITOR=true
             shift
             ;;
