@@ -10,8 +10,9 @@ def plot_world_trajectories(trajectories: np.ndarray,
                             show: bool = True,
                             output_filename: str = None) -> None:
     """
-    Plots 2D trajectories in world coordinates.
-    Each trajectory is plotted with a different color.
+    Plots 2D trajectories in world coordinates, mirrored relative to the X-axis.
+    Each trajectory is plotted with a different color, and the plot is square.
+
     Args:
         trajectories: Array of world positions, where each element represents a trajectory.
         ax: Matplotlib axis to draw the trajectory. Creates a new axis if None.
@@ -21,17 +22,27 @@ def plot_world_trajectories(trajectories: np.ndarray,
     Returns:
         None
     """
-    fig, ax = plt.subplots(figsize=(10, 6))
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Plot each trajectory in different colors
+    # Plot each trajectory in different colors, mirroring relative to X-axis
     for index in range(trajectories.shape[0]):
-        ax.plot(trajectories[index, :, 0], trajectories[index, :, 1], marker='o', linestyle='-', 
-                label=f"{index+1}")
+        ax.plot(trajectories[index, :, 0], -trajectories[index, :, 1], marker='o', linestyle='-', 
+                label=f"Trajectory {index+1}")
 
+    # Set labels, title, and legend
     ax.set_xlabel("X coordinate")
     ax.set_ylabel("Y coordinate")
-    ax.set_title("2D Trajectories Plot")
+    ax.set_title("2D Trajectories Plot (Mirrored and Square)")
     ax.legend(loc='best')
+
+    # Ensure the plot has equal aspect ratio for square visualization
+    ax.set_aspect("equal", adjustable="datalim")
+
+    # Automatically adjust the axis limits to fit the data
+    ax.relim()
+    ax.autoscale_view()
+
 
     if output_filename is None:
         output_path = os.path.join(cfg.OUTPUTS_DIR, "plot.png")
