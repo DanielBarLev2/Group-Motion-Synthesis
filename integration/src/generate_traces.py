@@ -1,11 +1,9 @@
 import os
 import h5py
 import numpy as np
-from matplotlib import pyplot as plt
 import tbsim.utils.geometry_utils as GeoUtils
 from integration.src.generate_plots import plot_world_trajectories
 from integration.config_files import cfg
-
 
 
 def load_scene_data(scene_key: str, data_path: str) -> dict:
@@ -70,8 +68,6 @@ def convert_to_world_coordinates(scene_data:  dict, output_filename: str = "init
 
     z_dim = np.zeros((world_positions.shape[0], world_positions.shape[1], 1))
     world_positions = np.concatenate((world_positions, z_dim), axis=2)
-
-    world_positions = world_positions * 10
 
     init_positions = world_positions[:, 0, :]
     init_positions = init_positions[:, [0, 2, 1]] 
@@ -228,7 +224,7 @@ def main():
 
     world_positions = convert_to_world_coordinates(scene_data=scene_data)
 
-    world_positions = convert_fps(world_positions, input_fps=10, output_fps=30)
+    world_positions = convert_fps(world_positions, input_fps=10, output_fps=20)
     
     plot_world_trajectories(world_positions, show=False, output_filename="trajectory_plot.png")
 
