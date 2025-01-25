@@ -33,7 +33,7 @@ def plot_world_trajectories(trajectories: np.ndarray,
     # Set labels, title, and legend
     ax.set_xlabel("X coordinate")
     ax.set_ylabel("Y coordinate")
-    ax.set_title("2D Trajectories Plot (Mirrored and Square)")
+    ax.set_title("2D Trajectories Plot")
     ax.legend(loc='best')
 
     # Ensure the plot has equal aspect ratio for square visualization
