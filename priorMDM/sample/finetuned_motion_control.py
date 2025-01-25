@@ -18,8 +18,11 @@ from data_loaders.get_data import get_dataset_loader
 from data_loaders.humanml.scripts.motion_process import recover_from_ric
 from data_loaders.humanml_utils import get_inpainting_mask
 import data_loaders.humanml.utils.paramUtil as paramUtil
-from data_loaders.humanml.utils.plot_script import plot_3d_motion, plot_multi_3d_motion_extended
+from data_loaders.humanml.utils.plot_script import plot_3d_motion
 import shutil
+
+
+
 
 def main():
     args_list = edit_inpainting_args()
@@ -40,8 +43,14 @@ def main():
     print('Loading dataset...')
 
     """##############################################################"""
-    synthetic_data = np.load('/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace/integration/synthetic_data.npy')
-    init_positions = np.load('/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace/integration/init_positions.npy')
+    CWD = "/home/ML_courses/03683533_2024/anton_kfir_daniel/priorMDM-Trace"
+    SYNTETIC_DATA_DIR = os.path.join(CWD, "integration/save/synthetic_data.npy")
+    INIT_POSITION_DIR = os.path.join(CWD, "integration/save/init_positions.npy")
+    SINGLE_ANIMATION_SAVE_DIR = os.path.join(CWD, "integration/outputs/singles")
+    MULTI_ANIMATION_SAVE_DIR = os.path.join(CWD, "integration/outputs/multi")
+
+    synthetic_data = np.load(SYNTETIC_DATA_DIR)
+    init_positions = np.load(INIT_POSITION_DIR)
     args.batch_size = synthetic_data.shape[0]
     args.num_samples = synthetic_data.shape[0]
     """##############################################################"""
@@ -84,7 +93,7 @@ def main():
     model_kwargs['y']['lengths'] = torch.full((args.batch_size,), max_frames)
     model_kwargs['y']['mask'][:, :, :, :4] = True
     model_kwargs['y']['mask'][:, :, :, 5:] = False
-    model_kwargs['y']['text'] = ["walk with one arm raized" for _ in range(args.batch_size)]
+    model_kwargs['y']['text'] = ["walk" for _ in range(args.batch_size)]
 
     print("synthetic_data was successfully injected into the model.")
     """##############################################################"""
@@ -169,15 +178,60 @@ def main():
         input_motions = input_motions.view(-1, *input_motions.shape[2:]).permute(0, 2, 3, 1).cpu().numpy()
 
 
+    for sample_i in range(args.num_samples):
+        rep_files = []
+        if args.show_input:
+            caption = 'Input Motion'
+            length = model_kwargs['y']['lengths'][sample_i]
+            motion = input_motions[sample_i].transpose(2, 0, 1)[:length]
+            save_file = 'input_motion{:02d}.mp4'.format(sample_i)
+            animation_save_path = os.path.join(out_path, save_file)
+            rep_files.append(animation_save_path)
+            print(f'[({sample_i}) "{caption}" | -> {save_file}]')
+            plot_3d_motion(animation_save_path, skeleton, motion, title=caption,
+                        dataset=args.dataset, fps=fps, vis_mode='gt',
+                        gt_frames=gt_frames_per_sample.get(sample_i, []))
+        for rep_i in range(args.num_repetitions):
+            caption = all_text[rep_i*args.batch_size + sample_i]
+            if args.guidance_param == 0:
+                caption = 'Edit [{}] unconditioned'.format(args.inpainting_mask)
+            else:
+                caption = 'Edit [{}]: {}'.format(args.inpainting_mask, caption)
+            length = all_lengths[rep_i*args.batch_size + sample_i]
+            motion = all_motions[rep_i*args.batch_size + sample_i].transpose(2, 0, 1)[:length]
+            save_file = 'sample{:02d}_rep{:02d}.mp4'.format(sample_i, rep_i)
+
+            """##############################################################"""
+
+            animation_save_path = SINGLE_ANIMATION_SAVE_DIR + save_file
+
+            """##############################################################"""
+
+            rep_files.append(animation_save_path)
+            print(f'[({sample_i}) "{caption}" | Rep #{rep_i} | -> {animation_save_path}]')
+            plot_3d_motion(animation_save_path, skeleton, motion, title=caption,
+                        dataset=args.dataset, fps=fps, vis_mode=args.inpainting_mask,
+                        gt_frames=gt_frames_per_sample.get(sample_i, []), painting_features=args.inpainting_mask.split(','))
+            # Credit for visualization: https://github.com/EricGuo5513/text-to-motion
+
+        if args.num_repetitions > 1:
+            all_rep_save_file = os.path.join(out_path, 'sample{:02d}.mp4'.format(sample_i))
+            ffmpeg_rep_files = [f' -i {f} ' for f in rep_files]
+            hstack_args = f' -filter_complex hstack=inputs={args.num_repetitions + (1 if args.show_input else 0)} '
+            ffmpeg_rep_cmd = f'ffmpeg -y -loglevel warning ' + ''.join(ffmpeg_rep_files) + f'{hstack_args} {all_rep_save_file}'
+            os.system(ffmpeg_rep_cmd)
+            print(f'[({sample_i}) "{caption}" | all repetitions | -> {all_rep_save_file}]')
+
+    abs_path = os.path.abspath(out_path)
+    print(f'[Done] Results are at [{abs_path}]')
+
     """##############################################################"""
     all_motions_list = []
     all_titles_list = []
 
-    # Instead of looping and plotting inside that loop,
-    # we only gather everything:
+    # instead of saving each sample separately, save all samples in one video
     for sample_i in range(args.num_samples):
 
-        # If you want to show the input:
         if args.show_input:
             caption = f'Input Motion (sample {sample_i})'
             length = model_kwargs['y']['lengths'][sample_i]
@@ -185,7 +239,6 @@ def main():
             all_motions_list.append(motion_input)
             all_titles_list.append(caption)
 
-        # Now gather the repeated motions:
         for rep_i in range(args.num_repetitions):
             raw_caption = all_text[rep_i * args.batch_size + sample_i]
             if args.guidance_param == 0:
@@ -198,9 +251,10 @@ def main():
             all_motions_list.append(motion_rep)
             all_titles_list.append(caption)
 
-    # Now we have one giant list containing all skeletons
-    # for all samples and all reps.
 
+    from ...integration.src.generate_plots import plot_multi_3d_motion_extended
+
+    out_path = MULTI_ANIMATION_SAVE_DIR
     # 1) 'default' view
     out_filename_default = 'all_samples_default.mp4'
     output_path_default = os.path.join(out_path, out_filename_default)
@@ -213,8 +267,7 @@ def main():
         dataset=args.dataset,
         fps=fps,
         color_mode='multi',
-        camera_view='default'
-    )
+        camera_view='default')
 
     # 2) 'top' (true top-down) view
     out_filename_top = 'all_samples_top.mp4'
@@ -228,12 +281,12 @@ def main():
         dataset=args.dataset,
         fps=fps,
         color_mode='multi',
-        camera_view='top'
-    )
+        camera_view='top')
 
     # 3) 'side' view
     out_filename_side = 'all_samples_side.mp4'
     output_path_side = os.path.join(out_path, out_filename_side)
+    
     plot_multi_3d_motion_extended(
         save_path=output_path_side,
         kinematic_tree=skeleton,
@@ -243,8 +296,7 @@ def main():
         dataset=args.dataset,
         fps=fps,
         color_mode='multi',
-        camera_view='side'
-    )
+        camera_view='side')
 
     print('[Done] Saved three separate MP4 files:')
     print('   1) ' + output_path_default)

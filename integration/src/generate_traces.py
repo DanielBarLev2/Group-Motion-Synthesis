@@ -3,6 +3,10 @@ import h5py
 import numpy as np
 from matplotlib import pyplot as plt
 import tbsim.utils.geometry_utils as GeoUtils
+from integration.src.generate_plots import plot_world_trajectories
+from integration.config_files import cfg
+
+
 
 def load_scene_data(scene_key: str, data_path: str) -> dict:
     """
@@ -73,9 +77,10 @@ def convert_to_world_coordinates(scene_data:  dict, output_filename: str = "init
     init_positions = init_positions[:, [0, 2, 1]] 
 
     # Saves the output data
-    output_path = os.path.join(os.getcwd(), output_filename)
+    output_path = os.path.join(cfg.SAVE_DIR, output_filename)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     np.save(output_path, init_positions)
-    print(f"init positions saved to: {output_path}")
+    print(f"init_positions saved to: {output_path}")
 
     return world_positions
 
@@ -110,47 +115,6 @@ def convert_fps(world_positions: np.array, input_fps: int = 10, output_fps: int 
             interpolated_world_positions[traj_index, :, coord] = np.interp(new_times, original_times, world_positions[traj_index, :, coord])
 
     return interpolated_world_positions
-
-
-def plot_world_trajectories(trajectories: np.ndarray,
-                            ax: plt.Axes = None,
-                            show: bool = True,
-                            save_path: str = None) -> None:
-    """
-    Plots 2D trajectories in world coordinates.
-    Each trajectory is plotted with a different color.
-    Args:
-        trajectories: Array of world positions, where each element represents a trajectory.
-        ax: Matplotlib axis to draw the trajectory. Creates a new axis if None.
-        show: Whether to display the plot using plt.show().
-        save_path: Path to save the plot image. Defaults to save in the current working directory.
-
-    Returns:
-        None
-    """
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    # Plot each trajectory in different colors
-    for index in range(trajectories.shape[0]):
-        ax.plot(trajectories[index, :, 0], trajectories[index, :, 1], marker='o', linestyle='-', 
-                label=f"{index+1}")
-
-    ax.set_xlabel("X coordinate")
-    ax.set_ylabel("Y coordinate")
-    ax.set_title("2D Trajectories Plot")
-    ax.legend(loc='best')
-
-    if save_path is None:
-        save_path = os.path.join(os.getcwd(), "plot.png")
-    else:
-        if not os.path.isabs(save_path):
-            save_path = os.path.join(os.getcwd(), save_path)
-
-    plt.savefig(save_path, dpi=200, bbox_inches='tight')
-    print(f"Plot saved to {save_path}")
-
-    if show:
-        plt.show()
 
 
 def convert_to_humanml3d_repr(positions, max_frames: int = 196):
@@ -243,29 +207,35 @@ def set_root_mask(root_data: list, output_filename="synthetic_data") -> np.ndarr
     synthetic_data[:, :4, :, :] = root_data  
 
     # Saves the output data
-    output_path = os.path.join(os.getcwd(), output_filename)
+    output_path = os.path.join(cfg.SAVE_DIR, output_filename)
     np.save(output_path, synthetic_data)
     print(f"synthetic data saved to: {output_path}")
-    
+
 
 def main():
-    scene_key = "scene_000171_orca_maps_31"
-    data_path = "data.hdf5"
-    max_frames = 196
+    """
+    Main function to process scene data and generate synthetic trajectory data.
 
-    scene_data = load_scene_data(scene_key=scene_key, data_path=data_path)
+    Steps:
+    1. Load scene data from an HDF5 file using the provided scene key.
+    2. Convert local trajectories to world coordinates and add a z-dimension.
+    3. Adjust the FPS of the trajectories from 10 to 30 using interpolation.
+    4. Plot and save the world trajectories as a 2D image.
+    5. Convert world positions into the HumanML3D representation.
+    6. Generate and save synthetic data in the expected format.
+    """
+    scene_data = load_scene_data(scene_key=cfg.SCENE_KEY, data_path=cfg.DATA_PATH)
 
     world_positions = convert_to_world_coordinates(scene_data=scene_data)
 
     world_positions = convert_fps(world_positions, input_fps=10, output_fps=30)
     
-    plot_world_trajectories(world_positions, show=False, save_path="trajectory_plot.png")
+    plot_world_trajectories(world_positions, show=False, output_filename="trajectory_plot.png")
 
-    humenml3d_data = convert_to_humanml3d_repr(positions=world_positions, max_frames=max_frames)
+    humenml3d_data = convert_to_humanml3d_repr(positions=world_positions, max_frames=cfg.MAX_FRAMES)
 
     set_root_mask(root_data=humenml3d_data, output_filename="synthetic_data")
 
-    print()
 
 if __name__ == "__main__":
-    main()  
+    main() 
