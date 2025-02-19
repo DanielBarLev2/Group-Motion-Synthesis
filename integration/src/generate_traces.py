@@ -4,6 +4,7 @@ import numpy as np
 import tbsim.utils.geometry_utils as GeoUtils
 from integration.src.generate_plots import plot_world_trajectories
 from integration.config_files import cfg
+from scipy.interpolate import interp1d
 
 
 def load_scene_data(scene_key: str, data_path: str) -> dict:
@@ -163,13 +164,15 @@ def convert_to_humanml3d_repr(positions, max_frames: int = 196):
         # Combine into final format (N-1, 4)
         sequence_data = np.concatenate([r_velocity[:, None], x_vel[:, None], z_vel[:, None], y_vals], axis=-1)
 
-        # Pad or cut the sequence to fit max_frames
-        if sequence_data.shape[0] < max_frames:
-            padding_rows = max_frames - sequence_data.shape[0]
-            padding = np.zeros((padding_rows, 4))
-            sequence_data = np.vstack([sequence_data, padding])
+        original_frames = sequence_data.shape[0]
+        if original_frames < max_frames:
+            x_old = np.linspace(0, 1, original_frames)
+            x_new = np.linspace(0, 1, max_frames)
+            
+            interpolator = interp1d(x_old, sequence_data, axis=0, kind="linear", fill_value="extrapolate")
+            sequence_data = interpolator(x_new)
         else:
-            sequence_data = sequence_data[:max_frames] 
+            sequence_data = sequence_data[:max_frames]
 
         root_data[i] = sequence_data
 
